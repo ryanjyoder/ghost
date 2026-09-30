@@ -19,9 +19,12 @@ func main() {
 	}
 }
 func run() error {
-	if len(os.Args) < 2 {
+	if len(os.Args) < 3 {
 		return fmt.Errorf("first argument should be the wordlist filename")
 	}
+
+	var maxMs int64
+	fmt.Sscanf(os.Args[2], "%d", &maxMs)
 
 	fmt.Println("Reading Word list and initializing the game")
 	newGame, err := game.LoadAndInitializeGame(os.Args[1])
@@ -52,7 +55,7 @@ func run() error {
 		}
 		newGame.Play(rune(line[0]))
 
-		ctx, cancel := context.WithTimeout(ctx, 3*time.Millisecond)
+		ctx, cancel := context.WithTimeout(ctx, time.Duration(maxMs)*time.Millisecond)
 		move := newGame.SuggestMove(ctx)
 		cancel()
 		if move.Challenge {
