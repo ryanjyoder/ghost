@@ -27,7 +27,7 @@ func run() error {
 	fmt.Sscanf(os.Args[2], "%d", &maxMs)
 
 	fmt.Println("Reading Word list and initializing the game")
-	newGame, err := game.LoadAndInitializeGame(os.Args[1])
+	myGame, err := game.LoadAndInitializeGame(os.Args[1])
 	if err != nil {
 		return err
 	}
@@ -38,14 +38,16 @@ func run() error {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
-		if newGame.GetCurrentFragment() != "" {
-			fmt.Println("Current word:", newGame.GetCurrentFragment())
+		if myGame.GetCurrentFragment() != "" {
+			fmt.Println("Current word:", myGame.GetCurrentFragment())
 		}
+
+		// Ask the user for their next letter
 		fmt.Println("Entter the letter you want to play (or press enter to challenge):")
 		scanner.Scan()
 		line := scanner.Text()
 		if len(line) == 0 {
-			word, err := newGame.Challenge()
+			word, err := myGame.Challenge()
 			if err != nil {
 				fmt.Println("You win!!")
 				break
@@ -53,10 +55,13 @@ func run() error {
 			fmt.Println("My word:", word)
 			break
 		}
-		newGame.Play(rune(line[0]))
 
+		// Play the letter they gave
+		myGame.Play(rune(line[0]))
+
+		// Ask the computer for their next move
 		ctx, cancel := context.WithTimeout(ctx, time.Duration(maxMs)*time.Millisecond)
-		move := newGame.SuggestMove(ctx)
+		move := myGame.SuggestMove(ctx)
 		cancel()
 		if move.Challenge {
 			fmt.Println("Challenge!")
@@ -67,7 +72,7 @@ func run() error {
 			break
 		}
 
-		newGame.Play(move.Letter)
+		myGame.Play(move.Letter)
 	}
 
 	return nil
