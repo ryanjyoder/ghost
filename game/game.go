@@ -75,7 +75,7 @@ func (g *Game) Evaluate(ctx context.Context) error {
 		return fmt.Errorf("not strong because this is not a valid fragment: fragment=%s", g.currentFragment)
 	}
 
-	suggestedMove := g.SuggestMove(ctx)
+	suggestedMove := g.suggestMove(ctx, 1)
 	// If the other player gives up (challenges), then we will win. We know this is valid fragment
 	if !suggestedMove.Challenge {
 		return fmt.Errorf("the other play will keep playing")
@@ -97,36 +97,56 @@ func (g *Game) Simulate() *Game {
 }
 
 func (g *Game) SuggestMove(ctx context.Context) Move {
+	return g.suggestMove(ctx, 4)
+}
+func (g *Game) suggestMove(ctx context.Context, maxGoroutines int) Move {
 
 	if _, validWord := g.validWords[g.currentFragment]; validWord {
 		return Move{Call: true}
 	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	moveChan := make(chan Move, 1)
+	workerChan := make(chan struct{}, maxGoroutines) // Pool limiter
 
 	for i := range 26 {
 		letter := rune(97 + 25 - i)
 
 		select {
 		case <-ctx.Done():
-			//fmt.Println("Oh no... ran out of time while thinking...")
+			// fmt.Println("Oh no... ran out of time while thinking...", g.currentFragment)
 			return Move{Letter: letter, Challenge: false}
 		default:
 		}
 
 		simulation := g.Simulate()
 		simulation.Play(letter)
-		err := simulation.Evaluate(ctx)
-		isStrongMove := err == nil
-		if isStrongMove {
-			return Move{
-				Letter:    letter,
-				Challenge: false,
+		workerChan <- struct{}{} // Grab a slot
+		go func() {
+			err := simulation.Evaluate(ctx)
+			isStrongMove := err == nil
+			if isStrongMove {
+				select {
+				case moveChan <- Move{
+					Letter:    letter,
+					Challenge: false,
+				}:
+				case <-ctx.Done():
+				}
 			}
-		}
+			<-workerChan // Free the slot
+		}()
 	}
 
-	// Can't win just give-up / challenge
-	return Move{
-		Challenge: true,
+	select {
+	case move := <-moveChan:
+		return move
+	case <-ctx.Done():
+		// Can't win just give-up / challenge
+		return Move{
+			Challenge: true,
+		}
 	}
 
 }
